@@ -95,7 +95,7 @@ $ fantrap check "SELECT SUM(i.amount) AS invoiced FROM invoices i JOIN shipments
     --gold "SELECT SUM(amount) FROM invoices WHERE invoice_date >= DATE '2025-01-01' AND invoice_date < DATE '2026-01-01' AND invoice_id IN (SELECT invoice_id FROM shipments)"
 FAN_TRAP  SUM(i.amount) is computed over invoices but the join invoices 1:N shipments
 (i.invoice_id = s.invoice_id) repeats each of its rows once per matching row on the other
-side, so the result is inflated. Aggregate the many side in a subquery grouped by the join
+side, so the result is inflated. Pre-aggregate the other side in a subquery grouped by the join
 key, filter with EXISTS, or use COUNT(DISTINCT key).
 gold total:     6,293,648.76
 query returns:  9,424,613.90

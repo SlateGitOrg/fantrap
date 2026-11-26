@@ -367,7 +367,7 @@ def _scan_scope(scope: Scope, catalog: Catalog) -> list[TrapFinding]:
                         FAN_TRAP,
                         f"{agg_sql} is computed over {sources[table].display} but the join "
                         f"{labels} ({on}) repeats each of its rows once per matching row on the "
-                        f"other side, so the result is inflated. Aggregate the many side in a "
+                        f"other side, so the result is inflated. Pre-aggregate the other side in a "
                         f"subquery grouped by the join key, filter with EXISTS, or use "
                         f"COUNT(DISTINCT key).",
                         labels,
