@@ -1,0 +1,160 @@
+# 30 labelled query shapes: 12 fan, 4 chasm, 14 safe. `label` is the expected classification.
+cases:
+  # ---- fan traps ----
+  - id: fan_sum_invoice_over_shipments
+    label: fan
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i JOIN shipments s ON s.invoice_id = i.invoice_id
+  - id: fan_sum_invoice_over_payments
+    label: fan
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i JOIN payments p ON p.invoice_id = i.invoice_id
+  - id: fan_avg_grouped
+    label: fan
+    sql: >
+      SELECT i.customer_id, AVG(i.amount) FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id GROUP BY i.customer_id
+  - id: fan_count_star_driving_table
+    label: fan
+    sql: >
+      SELECT COUNT(*) FROM invoices i JOIN shipments s ON s.invoice_id = i.invoice_id
+  - id: fan_count_column_not_distinct
+    label: fan
+    sql: >
+      SELECT COUNT(i.invoice_id) FROM invoices i JOIN payments p ON p.invoice_id = i.invoice_id
+  - id: fan_parent_column_through_chain
+    label: fan
+    sql: >
+      SELECT SUM(c.terms_days) FROM customers c
+      JOIN invoices i ON i.customer_id = c.customer_id
+  - id: fan_left_join
+    label: fan
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i
+      LEFT JOIN shipments s ON s.invoice_id = i.invoice_id
+  - id: fan_child_column_fanned_by_sibling
+    label: fan
+    sql: >
+      SELECT SUM(s.freight_cost) FROM shipments s
+      JOIN invoices i ON i.invoice_id = s.invoice_id
+      JOIN payments p ON p.invoice_id = i.invoice_id
+  - id: fan_implicit_join_in_where
+    label: fan
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i, shipments s WHERE i.invoice_id = s.invoice_id
+  - id: fan_sum_distinct_is_not_a_key
+    label: fan
+    sql: >
+      SELECT SUM(DISTINCT i.amount) FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id
+  - id: fan_many_to_many_siblings
+    label: fan
+    sql: >
+      SELECT SUM(s.freight_cost) FROM shipments s JOIN payments p ON p.invoice_id = s.invoice_id
+  - id: fan_unaggregated_derived_table
+    label: fan
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i
+      JOIN (SELECT invoice_id, amount FROM payments) p ON p.invoice_id = i.invoice_id
+  # ---- chasm traps ----
+  - id: chasm_sum_two_children
+    label: chasm
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id
+      JOIN payments p ON p.invoice_id = i.invoice_id
+  - id: chasm_count_star_two_children
+    label: chasm
+    sql: >
+      SELECT COUNT(*) FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id
+      JOIN payments p ON p.invoice_id = i.invoice_id
+  - id: chasm_with_credit_notes
+    label: chasm
+    sql: >
+      SELECT i.customer_id, SUM(i.amount) FROM invoices i
+      LEFT JOIN shipments s ON s.invoice_id = i.invoice_id
+      LEFT JOIN credit_notes n ON n.invoice_id = i.invoice_id
+      GROUP BY i.customer_id
+  - id: chasm_two_measures
+    label: chasm
+    sql: >
+      SELECT i.customer_id, SUM(i.amount), SUM(p.amount) FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id
+      JOIN payments p ON p.invoice_id = i.invoice_id
+      GROUP BY i.customer_id
+  # ---- safe ----
+  - id: safe_preaggregated_cte
+    label: safe
+    sql: >
+      WITH ship AS (SELECT invoice_id, COUNT(*) AS n FROM shipments GROUP BY invoice_id)
+      SELECT SUM(i.amount) FROM invoices i JOIN ship s ON s.invoice_id = i.invoice_id
+  - id: safe_count_distinct_primary_key
+    label: safe
+    sql: >
+      SELECT COUNT(DISTINCT i.invoice_id) FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id
+  - id: safe_many_to_one_customers
+    label: safe
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i JOIN customers c ON c.customer_id = i.customer_id
+  - id: safe_exists_semi_join
+    label: safe
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i
+      WHERE EXISTS (SELECT 1 FROM shipments s WHERE s.invoice_id = i.invoice_id)
+  - id: safe_sum_over_shipments_column
+    label: safe
+    sql: >
+      SELECT SUM(s.freight_cost) FROM shipments s JOIN invoices i ON i.invoice_id = s.invoice_id
+  - id: safe_in_semi_join
+    label: safe
+    sql: >
+      SELECT COUNT(*) FROM invoices i JOIN customers c ON c.customer_id = i.customer_id
+      WHERE i.invoice_id IN (SELECT invoice_id FROM payments)
+  - id: safe_inline_aggregated_subquery
+    label: safe
+    sql: >
+      SELECT SUM(i.amount - COALESCE(p.paid, 0)) FROM invoices i
+      LEFT JOIN (SELECT invoice_id, SUM(amount) AS paid FROM payments GROUP BY invoice_id) p
+        ON p.invoice_id = i.invoice_id
+  - id: safe_child_measure_up_the_chain
+    label: safe
+    sql: >
+      SELECT r.name, SUM(p.amount) FROM payments p
+      JOIN invoices i ON i.invoice_id = p.invoice_id
+      JOIN customers c ON c.customer_id = i.customer_id
+      JOIN regions r ON r.region_id = c.region_id GROUP BY r.name
+  - id: safe_min_max_ignore_repeats
+    label: safe
+    sql: >
+      SELECT MAX(i.amount), MIN(i.amount) FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id
+  - id: safe_count_star_child_first
+    label: safe
+    sql: >
+      SELECT COUNT(*) FROM shipments s JOIN invoices i ON i.invoice_id = s.invoice_id
+  - id: safe_two_preaggregated_children
+    label: safe
+    sql: >
+      SELECT SUM(i.amount) FROM invoices i
+      LEFT JOIN (SELECT invoice_id, COUNT(*) AS n FROM shipments GROUP BY invoice_id) s
+        ON s.invoice_id = i.invoice_id
+      LEFT JOIN (SELECT invoice_id, SUM(amount) AS paid FROM payments GROUP BY invoice_id) p
+        ON p.invoice_id = i.invoice_id
+  - id: safe_chain_of_many_to_one
+    label: safe
+    sql: >
+      SELECT r.name, SUM(i.amount) FROM invoices i
+      JOIN customers c ON c.customer_id = i.customer_id
+      JOIN regions r ON r.region_id = c.region_id GROUP BY r.name
+  - id: safe_mixed_grain_expression
+    label: safe
+    sql: >
+      SELECT AVG(p.payment_date - i.invoice_date) FROM payments p
+      JOIN invoices i ON i.invoice_id = p.invoice_id
+  - id: safe_row_level_join_without_aggregate
+    label: safe
+    sql: >
+      SELECT i.invoice_id, i.amount, s.units FROM invoices i
+      JOIN shipments s ON s.invoice_id = i.invoice_id
